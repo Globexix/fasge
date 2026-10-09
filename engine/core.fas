@@ -1,0 +1,36 @@
+const SCREEN_W i32 = 160
+const SCREEN_H i32 = 96
+
+var running bool = true
+var tick u32 = 0
+
+struct Rect {
+    x0 i32
+    y0 i32
+    x1 i32
+    y1 i32
+    color u8
+    enable bool
+}
+
+struct Gpu {
+    bg u8
+    rects arr[16, Rect]
+    palette arr[256, u32]
+}
+
+var gpu Gpu = {}
+// backend snapshot. games write to gpu
+var latched Gpu = {}
+
+fn present() void {
+    copy(latched, gpu)
+}
+
+fn frame_end() bool {
+    return tick % 6 == 5
+}
+
+fn quit() void {
+    running = false
+}
