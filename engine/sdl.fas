@@ -1,5 +1,6 @@
 use "C" <SDL.h>
 use "core.fas"
+use "font.fas"
 
 var sdl_colors arr[256, u32] = {}
 
@@ -26,6 +27,11 @@ fn sdl_pixel(x i32, y i32) i32 {
         if rect.enable != 0 && x >= rect.x0 && x <= rect.x1 && y >= rect.y0 && y <= rect.y1 {
             color = rect.color
         }
+    }
+    cell i32 = latched.text[(y / 6) * TEXT_COLS + x / 4]
+    ch i32 = cell & 255
+    if ch >= 1 && ch <= 127 && ((GLYPHS[ch] >> ((y % 6) * 4 + x % 4)) & 1) != 0 {
+        color = (cell >> 8) & 255
     }
     return color
 }

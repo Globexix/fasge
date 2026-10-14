@@ -25,6 +25,8 @@ const BTN_J i32 = 16384
 var buttons i32 = 0
 var buttons_prev i32 = 0
 
+const TEXT_COLS i32 = 40
+const TEXT_ROWS i32 = 16
 
 struct Rect {
     x0 i32, y0 i32
@@ -105,4 +107,19 @@ fn pressed(b i32) bool {
 
 fn released(b i32) bool {
     return buttons_prev & ~buttons & b != 0
+}
+
+fn text_put(col i32, row i32, chr i32, color i32) void {
+    if col < 0 || col >= TEXT_COLS || row < 0 || row >= TEXT_ROWS { return }
+    word i32 = chr | color << 8
+    if gpu.text[row * TEXT_COLS + col] != word { gpu.text[row * TEXT_COLS + col] = word }
+}
+
+// takes NUL terminated string
+fn text_print(col i32, row i32, str addr, color i32) void {
+    i i32 = 0
+    while str[u8, i] != 0 {
+        text_put(col + i, row, str[u8, i], color)
+        i += 1
+    }
 }
