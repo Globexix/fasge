@@ -1,11 +1,15 @@
 use "C" <SDL.h>
 use "core.fas"
 
-fn sdl_pixel(x i32, y i32) u8 {
-    color u8 = latched.bg
+var sdl_colors arr[256, u32] = {}
+
+const SCREEN_SCALE i32 = 5
+
+fn sdl_pixel(x i32, y i32) i32 {
+    color i32 = latched.bg
     for slot usize = 0; slot < len(latched.rects); slot += 1 {
         view rect = latched.rects[slot]
-        if rect.enable && x >= rect.x0 && x <= rect.x1 && y >= rect.y0 && y <= rect.y1 {
+        if rect.enable != 0 && x >= rect.x0 && x <= rect.x1 && y >= rect.y0 && y <= rect.y1 {
             color = rect.color
         }
     }
@@ -13,13 +17,11 @@ fn sdl_pixel(x i32, y i32) u8 {
 }
 
 fn sdl_compose(screen handle[SDL_Surface]) void {
-    view surf = handle_addr(screen)[SDL_Surface]
     for y i32 = 0; y < SCREEN_H; y += 1 {
         for x i32 = 0; x < SCREEN_W; x += 1 {
-            index u8 = sdl_pixel(x, y)
-            rgb u32 = if index == 0 { 0 } else { latched.palette[index] }
-            rect SDL_Rect = {trunc[i16](x * 5), trunc[i16](y * 5), 5, 5}
-            SDL_FillRect(screen, &rect, SDL_MapRGB(surf.format, trunc[u8](rgb >> 16), trunc[u8](rgb >> 8), trunc[u8](rgb)))
+            index i32 = sdl_pixel(x, y) & 255
+            rect SDL_Rect = {trunc[i16](x * SCREEN_SCALE), trunc[i16](y * SCREEN_SCALE), trunc[u16](SCREEN_SCALE), trunc[u16](SCREEN_SCALE)}
+            SDL_FillRect(screen, &rect, sdl_colors[index])
         }
     }
     SDL_Flip(screen)
@@ -29,21 +31,21 @@ fn main() i32 {
     if SDL_Init(bitcast[u32](SDL_INIT_VIDEO)) != 0 { return 1 }
     defer { SDL_Quit() }
 
-    screen handle[SDL_Surface] = SDL_SetVideoMode(800, 480, 32, bitcast[u32](SDL_SWSURFACE))
+    screen handle[SDL_Surface] = SDL_SetVideoMode(SCREEN_W * SCREEN_SCALE, SCREEN_H * SCREEN_SCALE, 32, bitcast[u32](SDL_SWSURFACE))
     if screen == null { return 2 }
 
-    // RGB332 palette. zero is always black
-    for index usize = 0; index < len(gpu.palette); index += 1 {
-        r u32 = trunc[u32](((index >> 5) & 7) * 255 / 7)
-        g u32 = trunc[u32](((index >> 2) & 7) * 255 / 7)
-        b u32 = trunc[u32]((index & 3) * 255 / 3)
-        gpu.palette[index] = (r << 16) | (g << 8) | b
-    }
+    view surf = handle_addr(screen)[SDL_Surface]
 
+    // RGB332 palette. zero is always black
+    for index usize = 0; index < len(sdl_colors); index += 1 {
+        r u8 = trunc[u8]((((index >> 5) & 7) * 73) >> 1)
+        g u8 = trunc[u8]((((index >> 2) & 7) * 73) >> 1)
+        b u8 = trunc[u8]((index & 3) * 85)
+        sdl_colors[index] = SDL_MapRGB(surf.format, r, g, b)
+    }
     game_init()
 
     start u32 = SDL_GetTicks()
-    updates u64 = 0
     ev SDL_Event = {}
 
     while running {
@@ -54,12 +56,10 @@ fn main() i32 {
         if keys[u8, SDLK_ESCAPE] != 0 { running = false }
         if !running { break }
 
-        game_update()
         tick += 1
-        updates += 1
-        if tick % 6 == 0 { sdl_compose(screen) }
+        if tick % 6 == 0 { game_update(); sdl_compose(screen) }
 
-        target u64 = updates * 1000 / 60
+        target u64 = zext[u64](tick) * 1000 / 60
         while zext[u64](SDL_GetTicks() - start) < target { SDL_Delay(1) }
     }
     return 0

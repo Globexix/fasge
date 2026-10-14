@@ -2,21 +2,63 @@ const SCREEN_W i32 = 160
 const SCREEN_H i32 = 96
 
 var running bool = true
-var tick u32 = 0
+var tick i32 = 0
 
 struct Rect {
-    x0 i32
-    y0 i32
-    x1 i32
-    y1 i32
-    color u8
-    enable bool
+    x0 i32, y0 i32
+    x1 i32, y1 i32
+    color i32
+    enable i32
+}
+
+struct Sprite {
+    x0 i32, y0 i32
+    id i32
+    color i32
+    enable i32
+    w i32
+}
+
+struct Camera {
+    px i32, py i32, pz i32
+    r00 i32,    r01 i32,    r02 i32 // ray matrix
+    r10 i32,    r11 i32,    r12 i32
+    r20 i32,    r21 i32,    r22 i32
+    k i32
+    qs i32
+    yaw i32
+}
+
+struct Plane {
+    x0 i32, y0 i32                  // screen box
+    x1 i32, y1 i32
+    ea0 i32, eb0 i32, ec0 i32       // cut line 1: keep where ea*x + eb*y + ec >= 0
+    ea1 i32, eb1 i32, ec1 i32       // cut line 2
+    a i32, b i32, c i32, d i32      // screen mode: u = (ax+by+c)/den, v = (dx+ey+f)/den
+    e i32, f i32, g i32, h i32, i i32 // den = gx+hy+i, bigger is nearer
+    pattern i32                     // 0 solid .. 8 texture
+    p0 i32, p1 i32, p2 i32          // far colors, bitmap bits, pattern scale
+    sh i32                          // shade: level = den >> sh, 31 = no shading
+    occlude i32                     // hides sprites behind it
+    enable i32
+    world i32                       // 0 screen mode, 1 world mode
+    nx i32, ny i32, nz i32          // facing direction
+    hh i32                          // position along that direction
+    ux i32, uy i32, uz i32, u0 i32  // texture u across the world
+    vx i32, vy i32, vz i32, v0 i32  // texture v across the world
+    umax i32, vmax i32              // surface size in texture units, 0 = endless
+    tex i32                         // rom texture for pattern 8
+    lv0 i32, lv1 i32, lv2 i32       // colors for nearer shade levels
 }
 
 struct Gpu {
-    bg u8
+    bg i32
+    planes arr[16, Plane]
+    sprites arr[2, Sprite]
     rects arr[16, Rect]
-    palette arr[256, u32]
+    text arr[640, i32]
+    camera Camera
+    video i32, video_palette i32
 }
 
 var gpu Gpu = {}
@@ -25,10 +67,6 @@ var latched Gpu = {}
 
 fn present() void {
     copy(latched, gpu)
-}
-
-fn frame_end() bool {
-    return tick % 6 == 5
 }
 
 fn quit() void {

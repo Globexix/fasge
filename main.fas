@@ -3,21 +3,23 @@ use "engine/sdl.fas"
 var rect_dx i32 = 1
 
 fn game_init() void {
-    gpu.palette[1] = 0x203850
-    gpu.palette[2] = 0xffb040
-    gpu.bg = 1
-    rect Rect = {.x0 = 10, .y0 = 43, .x1 = 19, .y1 = 52, .color = 2, .enable = true}
-    copy(gpu.rects[0], rect)
+    gpu.bg = 0x25
+
+    gpu.rects[0].x0 = 10
+    gpu.rects[0].y0 = 43
+    gpu.rects[0].x1 = 19
+    gpu.rects[0].y1 = 52
+    gpu.rects[0].color = 0xf5
+    gpu.rects[0].enable = 1
+
     present()
 }
 
 fn game_update() void {
-    if frame_end() {
-        view rect = gpu.rects[0]
-        if rect.x1 == SCREEN_W - 1 { rect_dx = -1 }
-        if rect.x0 == 0 { rect_dx = 1 }
-        rect.x0 += rect_dx
-        rect.x1 += rect_dx
-        present()
-    }
+    view rect = gpu.rects[0]
+    if rect.x1 == SCREEN_W - 1 { rect_dx = -1 }
+    if rect.x0 == 0 { rect_dx = 1 }
+    rect.x0 += rect_dx
+    rect.x1 += rect_dx
+    present()
 }
