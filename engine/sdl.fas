@@ -5,6 +5,20 @@ var sdl_colors arr[256, u32] = {}
 
 const SCREEN_SCALE i32 = 5
 
+const SDL_KEYS arr[15, i32] = {
+    SDLK_UP, SDLK_DOWN, SDLK_RIGHT, SDLK_LEFT,
+    SDLK_RETURN,
+    SDLK_1, SDLK_2, SDLK_3, SDLK_4, SDLK_5, SDLK_6, SDLK_7, SDLK_8, SDLK_9, SDLK_0,
+}
+
+fn sdl_read_buttons(keys addr) i32 {
+    bits i32 = 0
+    for i usize = 0; i < len(SDL_KEYS); i += 1 {
+        if keys[u8, SDL_KEYS[i]] != 0 { bits = bits | (1 << i) }
+    }
+    return bits
+}
+
 fn sdl_pixel(x i32, y i32) i32 {
     color i32 = latched.bg
     for slot usize = 0; slot < len(latched.rects); slot += 1 {
@@ -57,7 +71,12 @@ fn main() i32 {
         if !running { break }
 
         tick += 1
-        if tick % 6 == 0 { game_update(); sdl_compose(screen) }
+        if tick % 6 == 0 {
+            buttons_prev = buttons
+            buttons = sdl_read_buttons(keys)
+            game_update()
+            sdl_compose(screen)
+        }
 
         target u64 = zext[u64](tick) * 1000 / 60
         while zext[u64](SDL_GetTicks() - start) < target { SDL_Delay(1) }
