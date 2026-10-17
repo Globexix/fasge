@@ -1,53 +1,88 @@
 use "engine/sdl.fas"
 
-var rect_dx i32 = 1
-var steps i32 = 0
-var steps_text arr[4, u8] = {'0', '0', '0', 0}
+const RECT_SIZE i32 = 10
+const DIGIT_WORD i32 = 48 + 0xff00
+
+var rx i32 = 10
+var ry i32 = 43
+var d0 i32 = 0
+var d1 i32 = 0
+var d2 i32 = 0
 
 fn game_init() void {
     gpu.bg = 0x25
 
-    gpu.rects[0].x0 = 10
-    gpu.rects[0].y0 = 43
-    gpu.rects[0].x1 = 19
-    gpu.rects[0].y1 = 52
+    gpu.rects[0].x0 = rx
+    gpu.rects[0].y0 = ry
+    gpu.rects[0].x1 = rx + RECT_SIZE - 1
+    gpu.rects[0].y1 = ry + RECT_SIZE - 1
     gpu.rects[0].color = 0xf5
     gpu.rects[0].enable = 1
 
     text_print(0, 0, c"STEPS: ", 0xfc)
-    text_print(6, 0, &steps_text, 0xff)
+    text_print(6, 0, c"000", 0xff)
 
     present()
 }
 
 fn game_update() void {
-    view rect = gpu.rects[0]
+    // every condition reads only the old position and digits
+    up bool = (buttons & BTN_UP != 0) & (ry > 0)
+    down bool = (buttons & BTN_DOWN != 0) & (ry < SCREEN_H - RECT_SIZE)
+    right bool = (buttons & BTN_RIGHT != 0) & (rx < SCREEN_W - RECT_SIZE)
+    left bool = (buttons & BTN_LEFT != 0) & (rx > 0)
+    my bool = up | down
+    mx bool = right | left
 
-    if btn(1) && rect.y0 > 0 {
-        rect.y0 -= 1
-        rect.y1 -= 1
-        steps += 1
-    } else if btn(2) && rect.y1 < SCREEN_H - 1 {
-        rect.y0 += 1
-        rect.y1 += 1
-        steps += 1
+    c1 bool = false
+    if my & mx {
+        c1 = d0 >= 8
+    } else if mx | my {
+        c1 = d0 == 9
+    }
+    c2 bool = c1 & (d1 == 9)
+    c3 bool = c2 & (d2 == 9)
+
+    if up {
+        ry -= 1
+    } else if down {
+        ry += 1
     }
 
-    if btn(4) && rect.x1 < SCREEN_W - 1 {
-        rect.x0 += 1
-        rect.x1 += 1
-        steps += 1
-    } else if btn(8) && rect.x0 > 0 {
-        rect.x0 -= 1
-        rect.x1 -= 1
-        steps += 1
+    if right {
+        rx += 1
+    } else if left {
+        rx -= 1
     }
 
-    steps_text[2] = trunc[u8]('0' + steps % 10)
-    steps_text[1] = trunc[u8]('0' + (steps / 10) % 10)
-    steps_text[0] = trunc[u8]('0' + (steps / 100) % 10)
+    n i32 = 0
+    if my { n += 1 }
+    if mx { n += 1 }
 
-    text_print(6, 0, &steps_text, 0xff)
+    if c1 {
+        d0 = d0 + n - 10
+    } else {
+        d0 = d0 + n
+    }
 
+    if c3 {
+        d2 = 0
+    } else if c2 {
+        d2 += 1
+    }
+
+    if c2 {
+        d1 = 0
+    } else if c1 {
+        d1 += 1
+    }
+
+    gpu.rects[0].y0 = ry
+    gpu.rects[0].y1 = ry + RECT_SIZE - 1
+    gpu.rects[0].x0 = rx
+    gpu.rects[0].x1 = rx + RECT_SIZE - 1
+    gpu.text[6] = DIGIT_WORD + d2
+    gpu.text[7] = DIGIT_WORD + d1
+    gpu.text[8] = DIGIT_WORD + d0
     present()
 }
