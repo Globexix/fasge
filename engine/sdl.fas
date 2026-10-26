@@ -1,16 +1,21 @@
 use pkg "sdl"
+// SDL.h pulls in stdlib.h whose random() clashes with fas definition
+use "C" <<C
+    #define random libc_random
+C
 use "C" <SDL.h>
-use "C" <stdio.h>
+use "C" <time.h>
 use "raster.fas"
 
 const SCREEN_SCALE i32 = 5
 
-const SDL_KEYS arr[7, i32] = {
+const SDL_KEYS arr[6, i32] = {
     SDLK_UP, SDLK_DOWN, SDLK_RIGHT, SDLK_LEFT,
     SDLK_RETURN,
-    SDLK_1, SDLK_2
+    SDLK_1
 }
 
+// one key per button, in bit order
 fn sdl_read_buttons(keys addr) i32 {
     bits i32 = 0
     for i usize = 0; i < len(SDL_KEYS); i += 1 {
@@ -21,17 +26,10 @@ fn sdl_read_buttons(keys addr) i32 {
 
 var sdl_colors arr[256, u32] = {}
 
+// RGB332
 fn sdl_palette(format handle[SDL_PixelFormat]) void {
-    custom bool = false
-    for i usize = 0; i < len(latched.palette); i += 1 {
-        if latched.palette[i] != 0 { custom = true }
-    }
     for i usize = 0; i < len(sdl_colors); i += 1 {
-        rgb u32 = bitcast[u32](latched.palette[i])
-        if !custom {
-            // RGB332
-            rgb = trunc[u32](((((i >> 5) & 7) * 73) >> 1) << 16 | ((((i >> 2) & 7) * 73) >> 1) << 8 | (i & 3) * 85)
-        }
+        rgb u32 = trunc[u32](((((i >> 5) & 7) * 73) >> 1) << 16 | ((((i >> 2) & 7) * 73) >> 1) << 8 | (i & 3) * 85)
         if i == 0 { rgb = 0 }                   // zero is always black
         sdl_colors[i] = SDL_MapRGB(format, trunc[u8](rgb >> 16), trunc[u8](rgb >> 8), trunc[u8](rgb))
     }
@@ -56,8 +54,36 @@ fn sdl_compose(screen handle[SDL_Surface]) void {
 
 var latched Gpu = {}
 
+var sdl_ticks u32 = 0
+
 fn present() void {
     copy(latched, gpu)
+}
+
+fn load_start() void {}
+fn load_done() void {}
+
+var random_state u32 = 0
+
+// xorshift32, seeded from the wall clock on the first call. never negative
+fn random() i32 {
+    if random_state == 0 { random_state = trunc[u32](bitcast[u64](time(null))) ^ 0x9e3779b9 }
+    if random_state == 0 { random_state = 1 }
+    random_state = random_state ^ (random_state << 13)
+    random_state = random_state ^ (random_state >> 17)
+    random_state = random_state ^ (random_state << 5)
+    return bitcast[i32](random_state >> 1)
+}
+
+// box is [x0, x1) x [y0, y1) in cells, packed as 6 bit fields like the hardware register
+fn text_fill(x0 i32, y0 i32, x1 i32, y1 i32, word i32) void {
+    gpu.text_fill = word
+    gpu.text_box = (x0 & 63) | (y0 & 63) << 6 | (x1 & 63) << 12 | (y1 & 63) << 18
+    for row i32 = clamp(y0, 0, TEXT_ROWS); row < clamp(y1, 0, TEXT_ROWS); row += 1 {
+        for col i32 = clamp(x0, 0, TEXT_COLS); col < clamp(x1, 0, TEXT_COLS); col += 1 {
+            gpu.text[row * TEXT_COLS + col] = word
+        }
+    }
 }
 
 fn main() i32 {
@@ -72,28 +98,25 @@ fn main() i32 {
 
     start u32 = SDL_GetTicks()
     ev SDL_Event = {}
-    compose_ms u32 = 0
 
     while running {
         while SDL_PollEvent(&ev) != 0 {
-            if ev.type == SDL_QUIT { running = false }
+            if ev.type == SDL_QUIT { quit() }
         }
         keys addr = SDL_GetKeyState(null)
-        if keys[u8, SDLK_ESCAPE] != 0 { running = false }
+        if keys[u8, SDLK_ESCAPE] != 0 || keys[u8, SDLK_j] != 0 { quit() }
         if !running { break }
 
-        tick += 1
-        if tick % 6 == 0 {
+        sdl_ticks += 1
+        if sdl_ticks % 6 == 0 {
+            tick += 1
             buttons_prev = buttons
             buttons = sdl_read_buttons(keys)
-            t0 u32 = SDL_GetTicks()
             game_update()
-            t1 u32 = SDL_GetTicks()
             sdl_compose(screen)
-            compose_ms += SDL_GetTicks() - t1
         }
 
-        target u64 = zext[u64](tick) * 1000 / 60
+        target u64 = zext[u64](sdl_ticks) * 1000 / 60
         while zext[u64](SDL_GetTicks() - start) < target { SDL_Delay(1) }
     }
 

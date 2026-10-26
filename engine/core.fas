@@ -11,7 +11,6 @@ const BTN_LEFT i32 = 8
 
 const BTN_SPECIAL i32 = 16
 const BTN_A1 i32 = 32
-const BTN_A2 i32 = 64
 
 var buttons i32 = 0
 var buttons_prev i32 = 0
@@ -100,17 +99,43 @@ fn released(b i32) bool {
     return buttons_prev & ~buttons & b != 0
 }
 
-fn text_put(col i32, row i32, chr i32, color i32) void {
+// skips the store when the cell is unchanged. text_fill does not update gpu.text on the PC,
+// so after a fill redraw what you need without relying on this
+fn text_put(col i32, row i32, chr i32, fg i32, bg i32) void {
     if col < 0 || col >= TEXT_COLS || row < 0 || row >= TEXT_ROWS { return }
-    word i32 = chr | color << 8
+    word i32 = (chr & 255) | (fg & 255) << 8 | (bg & 255) << 16 | ((chr >> 8) & 1) << 24
     if gpu.text[row * TEXT_COLS + col] != word { gpu.text[row * TEXT_COLS + col] = word }
 }
 
 // takes NUL terminated string
-fn text_print(col i32, row i32, str addr, color i32) void {
+fn text_print(col i32, row i32, str addr, fg i32, bg i32) void {
     i i32 = 0
     while str[u8, i] != 0 {
-        text_put(col + i, row, str[u8, i], color)
+        text_put(col + i, row, zext[i32](str[u8, i]), fg, bg)
         i += 1
     }
+}
+
+// n in decimal starting at col, with a leading minus when negative. returns the width
+fn text_number(col i32, row i32, n i32, fg i32, bg i32) i32 {
+    digits arr[11, i32] = {}
+    count i32 = 0
+    m u32 = bitcast[u32](n)                 // unsigned, so -2147483648 negates in 32 bits
+    if n < 0 { m = 0 - m }
+    while true {
+        digits[bitcast[u32](count)] = bitcast[i32](m % 10)
+        count += 1
+        m = m / 10
+        if m == 0 { break }
+    }
+    width i32 = 0
+    if n < 0 {
+        text_put(col, row, 45, fg, bg)
+        width = 1
+    }
+    for i i32 = count - 1; i >= 0; i -= 1 {
+        text_put(col + width, row, 48 + digits[bitcast[u32](i)], fg, bg)
+        width += 1
+    }
+    return width
 }
