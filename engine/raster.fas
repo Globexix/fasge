@@ -242,9 +242,9 @@ fn compose_text() void {
         for x i32 = 0; x < SCREEN_W; x += 1 {
             cell i32 = latched.text[(y / 6) * TEXT_COLS + x / 4]
             ch i32 = (cell & 255) | ((cell >> 16) & 256)
-            if ch == 0 || ch >= bitcast[i32](trunc[u32](len(GLYPHS))) { continue }
-            // glyph pixels are 0 none, 1 fg, 2 bg. font.fas is 1 bit, so only ever 0 or 1
-            px i32 = (GLYPHS[ch] >> ((y % 6) * 4 + x % 4)) & 1
+            if ch == 0 || ch >= bitcast[i32](trunc[u32](len(GLYPH_FG))) { continue }
+            bit i32 = (y % 6) * 4 + x % 4
+            px i32 = ((GLYPH_FG[ch] >> bit) & 1) | (((GLYPH_BG[ch] >> bit) & 1) << 1)
             if px == 0 { continue }
             color i32 = if px == 1 { cell >> 8 } else { cell >> 16 }
             indices[bitcast[u32](y * SCREEN_W + x)] = trunc[u8](bitcast[u32](color) & 255)
