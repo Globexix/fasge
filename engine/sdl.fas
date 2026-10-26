@@ -1,15 +1,14 @@
+use pkg "sdl"
 use "C" <SDL.h>
-use "core.fas"
-use "font.fas"
-
-var sdl_colors arr[256, u32] = {}
+use "C" <stdio.h>
+use "raster.fas"
 
 const SCREEN_SCALE i32 = 5
 
-const SDL_KEYS arr[15, i32] = {
+const SDL_KEYS arr[7, i32] = {
     SDLK_UP, SDLK_DOWN, SDLK_RIGHT, SDLK_LEFT,
     SDLK_RETURN,
-    SDLK_1, SDLK_2, SDLK_3, SDLK_4, SDLK_5, SDLK_6, SDLK_7, SDLK_8, SDLK_9, SDLK_0,
+    SDLK_1, SDLK_2
 }
 
 fn sdl_read_buttons(keys addr) i32 {
@@ -20,31 +19,45 @@ fn sdl_read_buttons(keys addr) i32 {
     return bits
 }
 
-fn sdl_pixel(x i32, y i32) i32 {
-    color i32 = latched.bg
-    for slot usize = 0; slot < len(latched.rects); slot += 1 {
-        view rect = latched.rects[slot]
-        if rect.enable != 0 && x >= rect.x0 && x <= rect.x1 && y >= rect.y0 && y <= rect.y1 {
-            color = rect.color
+var sdl_colors arr[256, u32] = {}
+
+fn sdl_palette(format handle[SDL_PixelFormat]) void {
+    custom bool = false
+    for i usize = 0; i < len(latched.palette); i += 1 {
+        if latched.palette[i] != 0 { custom = true }
+    }
+    for i usize = 0; i < len(sdl_colors); i += 1 {
+        rgb u32 = bitcast[u32](latched.palette[i])
+        if !custom {
+            // RGB332
+            rgb = trunc[u32](((((i >> 5) & 7) * 73) >> 1) << 16 | ((((i >> 2) & 7) * 73) >> 1) << 8 | (i & 3) * 85)
         }
+        if i == 0 { rgb = 0 }                   // zero is always black
+        sdl_colors[i] = SDL_MapRGB(format, trunc[u8](rgb >> 16), trunc[u8](rgb >> 8), trunc[u8](rgb))
     }
-    cell i32 = latched.text[(y / 6) * TEXT_COLS + x / 4]
-    ch i32 = cell & 255
-    if ch >= 1 && ch <= 127 && ((GLYPHS[ch] >> ((y % 6) * 4 + x % 4)) & 1) != 0 {
-        color = (cell >> 8) & 255
-    }
-    return color
 }
 
 fn sdl_compose(screen handle[SDL_Surface]) void {
-    for y i32 = 0; y < SCREEN_H; y += 1 {
-        for x i32 = 0; x < SCREEN_W; x += 1 {
-            index i32 = sdl_pixel(x, y) & 255
-            rect SDL_Rect = {trunc[i16](x * SCREEN_SCALE), trunc[i16](y * SCREEN_SCALE), trunc[u16](SCREEN_SCALE), trunc[u16](SCREEN_SCALE)}
-            SDL_FillRect(screen, &rect, sdl_colors[index])
+    compose()
+
+    view surf = handle_addr(screen)[SDL_Surface]
+    sdl_palette(surf.format)
+    SDL_LockSurface(screen)
+    for y i32 = 0; y < SCREEN_H * SCREEN_SCALE; y += 1 {
+        line addr = surf.pixels + y * zext[i32](surf.pitch)
+        src usize = bitcast[u32]((y / SCREEN_SCALE) * SCREEN_W)
+        for x i32 = 0; x < SCREEN_W * SCREEN_SCALE; x += 1 {
+            line[u32, x] = sdl_colors[indices[src + bitcast[u32](x / SCREEN_SCALE)]]
         }
     }
+    SDL_UnlockSurface(screen)
     SDL_Flip(screen)
+}
+
+var latched Gpu = {}
+
+fn present() void {
+    copy(latched, gpu)
 }
 
 fn main() i32 {
@@ -54,19 +67,12 @@ fn main() i32 {
     screen handle[SDL_Surface] = SDL_SetVideoMode(SCREEN_W * SCREEN_SCALE, SCREEN_H * SCREEN_SCALE, 32, bitcast[u32](SDL_SWSURFACE))
     if screen == null { return 2 }
 
-    view surf = handle_addr(screen)[SDL_Surface]
-
-    // RGB332 palette. zero is always black
-    for index usize = 0; index < len(sdl_colors); index += 1 {
-        r u8 = trunc[u8]((((index >> 5) & 7) * 73) >> 1)
-        g u8 = trunc[u8]((((index >> 2) & 7) * 73) >> 1)
-        b u8 = trunc[u8]((index & 3) * 85)
-        sdl_colors[index] = SDL_MapRGB(surf.format, r, g, b)
-    }
+    build_yaw_table()
     game_init()
 
     start u32 = SDL_GetTicks()
     ev SDL_Event = {}
+    compose_ms u32 = 0
 
     while running {
         while SDL_PollEvent(&ev) != 0 {
@@ -80,12 +86,16 @@ fn main() i32 {
         if tick % 6 == 0 {
             buttons_prev = buttons
             buttons = sdl_read_buttons(keys)
+            t0 u32 = SDL_GetTicks()
             game_update()
+            t1 u32 = SDL_GetTicks()
             sdl_compose(screen)
+            compose_ms += SDL_GetTicks() - t1
         }
 
         target u64 = zext[u64](tick) * 1000 / 60
         while zext[u64](SDL_GetTicks() - start) < target { SDL_Delay(1) }
     }
+
     return 0
 }

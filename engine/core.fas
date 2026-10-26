@@ -83,12 +83,6 @@ struct Gpu {
 }
 
 var gpu Gpu = {}
-// backend snapshot. games write to gpu
-var latched Gpu = {}
-
-fn present() void {
-    copy(latched, gpu)
-}
 
 fn quit() void {
     running = false
