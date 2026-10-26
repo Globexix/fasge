@@ -10,23 +10,18 @@ const BTN_RIGHT i32 = 4
 const BTN_LEFT i32 = 8
 
 const BTN_SPECIAL i32 = 16
-
-const BTN_A i32 = 32
-const BTN_B i32 = 64
-const BTN_C i32 = 128
-const BTN_D i32 = 256
-const BTN_E i32 = 512
-const BTN_F i32 = 1024
-const BTN_G i32 = 2048
-const BTN_H i32 = 4096
-const BTN_I i32 = 8192
-const BTN_J i32 = 16384
+const BTN_A1 i32 = 32
+const BTN_A2 i32 = 64
 
 var buttons i32 = 0
 var buttons_prev i32 = 0
 
 const TEXT_COLS i32 = 40
 const TEXT_ROWS i32 = 16
+
+const PLANE_SLOTS usize = 16
+const SPRITE_SLOTS usize = 2
+const RECT_SLOTS usize = 16
 
 struct Rect {
     x0 i32, y0 i32
@@ -36,11 +31,11 @@ struct Rect {
 }
 
 struct Sprite {
-    x0 i32, y0 i32
-    id i32
-    color i32
+    x0 i32, y0 i32                  // screen position of the top left texel
+    id i32                          // sprite rom entry
+    color i32                       // colors for texels 1, 2, 3 in bytes 0, 1, 2
     enable i32
-    w i32
+    w i32                           // depth: hidden behind an occluding plane with a bigger den, 0 = never
 }
 
 struct Camera {
@@ -77,12 +72,14 @@ struct Plane {
 
 struct Gpu {
     bg i32
-    planes arr[16, Plane]
-    sprites arr[2, Sprite]
-    rects arr[16, Rect]
+    planes arr[PLANE_SLOTS, Plane]
+    sprites arr[SPRITE_SLOTS, Sprite]
+    rects arr[RECT_SLOTS, Rect]
     text arr[640, i32]
+    palette arr[256, i32]
     camera Camera
     video i32, video_palette i32
+    text_fill i32, text_box i32
 }
 
 var gpu Gpu = {}
