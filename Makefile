@@ -1,13 +1,21 @@
 FAS ?= fas
-SDL_CFLAGS := $(shell sdl-config --cflags)
-SDL_LIBS := $(shell sdl-config --libs)
 
-.PHONY: all run
-all: build/fasge
+EXAMPLES := snake minesweeper square
+ENGINE := $(wildcard engine/*.fas)
 
-build/fasge: main.fas engine/core.fas engine/sdl.fas
+src_snake := examples/snake.fas
+src_minesweeper := examples/mines.fas
+src_square := examples/square.fas
+
+.PHONY: all $(EXAMPLES) $(addprefix run-,$(EXAMPLES))
+all: $(EXAMPLES)
+
+$(EXAMPLES): %: build/%
+
+.SECONDEXPANSION:
+build/%: $$(src_$$*) $(ENGINE)
 	mkdir -p build
-	$(FAS) main.fas $(SDL_CFLAGS) $(SDL_LIBS) -o $@
+	$(FAS) $< -o $@
 
-run: build/fasge
-	./build/fasge
+$(addprefix run-,$(EXAMPLES)): run-%: build/%
+	./build/$*
