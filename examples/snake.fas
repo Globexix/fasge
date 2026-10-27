@@ -1,0 +1,374 @@
+use "../engine/sdl.fas"
+
+// Snake on the text grid. Hit a wall or yourself and you die, eat food to grow and score.
+// After dying, any button starts a new game. The text grid doubles as the collision map,
+// and the buttons steer the move after the one drawn this frame.
+const W i32 = 40
+const H i32 = 16
+const MAXLEN i32 = 128
+// colours are 3-3-2 rrrgggbb and glyphs come from the system font.
+// The snake's cells alternate between the two blues
+const BODY i32 = 47 << 8
+const WALL i32 = 22 | 44 << 8
+const ZERO i32 = 176 | 255 << 8   // score digits, one pixel lower
+const FOOD i32 = 20 | 224 << 8
+const WHITE i32 = 255
+const OVER_WAIT i32 = 10   // frames on the death screen before a button restarts
+
+extern "C" {
+    var state i32 = 0       // 0 playing, 1 dead
+    var length i32 = 0
+    var score i32 = 0
+}
+
+// next step from the buttons and the last step, at (buttons & 15) + 16 * (last + 40)
+// the mask keeps the index in bounds for the scheduler
+var step arr[2048, i32] = {-40, -40, -40, -40, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, -40, 40, -40, -1, -40, 40, -40, -1, -40, 40, -40, -1, -40, 40, -40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, -40, 40, -40, 1, -40, 40, -40, 1, -40, 40, -40, 1, -40, 40, -40, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 40, 40, 40, 40, 1, 1, 1, 1, -1, -1, -1, -1, -1, -1, -1, -1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+var tc i32 = 0          // tail cell
+var hc i32 = 0
+var dstep i32 = 1       // step the next move will take
+var food i32 = 0
+var wait i32 = 0
+var pend i32 = 0        // an eat waiting to grow the snake and show new food
+var grow i32 = 0        // grow the snake this frame and show the new food at fc
+var pg i32 = 0          // grew last frame, so the snake looks longer now
+var u i32 = 0           // last three digit words of the score
+var t i32 = 0
+var h i32 = 0
+var cr i32 = 0          // carry pending for the tens (1) or hundreds (2)
+var sa i32 = 38         // score cell written every frame, and its word
+var sv i32 = 0
+var fc i32 = 0          // next food cell
+var same i32 = 0        // fc was also the food cell last frame, so fvr and near refer to it
+var fvr i32 = 0         // fc's word from last frame
+var near i32 = 0        // fc was within two moves of the head last frame
+var ta i32 = 0          // this frame's tail store, either the tail to clear or the new food
+var tv i32 = 0
+var tail_prev i32 = 39         // last frame's tail store, done this frame so the snake has one cell
+var tvm i32 = 0         // the word written by that store
+var ov i32 = 0          // head cell's word before the head moved in
+var cv i32 = 0          // after a death, the word the crash cell gets back
+var pc i32 = 0          // last head cell, which turns into body
+var pin i32 = 4         // the side pc joins, the way it came in
+var pi i32 = 2          // that side as right 0, down 1, left 2, up 3
+var pp i32 = 0          // old head cell and its body word, written on the next full frame
+var pw i32 = 0
+var vs i32 = 0          // words of the next head cell and the tail, read before the slide covers them
+var ws i32 = 0
+var once i32 = 1        // loop trip count. A one-trip loop keeps a block of stores apart
+var clr i32 = 0         // set by a button on the death screen to clear the message and restart
+// GAME OVER at 4x, each entry is cell | glyph << 10 (last one repeated to make 80)
+var msg arr[80, i32] = {133362, 132339, 132340, 138522, 137500, 140610, 141635, 142660, 144747, 144748, 133366, 132343, 133368, 138526, 137503, 138528, 142662, 142664, 144750, 144752, 134394, 133371, 134396, 138530, 138531, 138532, 142666, 142668, 144754, 144756, 134398, 132351, 132352, 138534, 137511, 142670, 141647, 141648, 144758, 144759, 144760, 133382, 132359, 133384, 138542, 138544, 140630, 141655, 140632, 144767, 134410, 134412, 138546, 138548, 140634, 141659, 140636, 144771, 134414, 132367, 132368, 138550, 137527, 142686, 141663, 141664, 144774, 144775, 144776, 134418, 132371, 133396, 138554, 137531, 136508, 142690, 142692, 144778, 144780, 144780}
+var ring arr[512, i32] = {}  // cells the head was drawn in, so a death can erase the snake without walking it
+var bi i32 = 0
+var seed i32 = 1
+var phase i32 = 0
+var steer i32 = 0
+var slide_h i32 = 0
+var slide_p i32 = 0
+var slide_t i32 = 0
+
+fn roll() i32 {
+    seed = (seed * 75 + 74) % 65537
+    return seed
+}
+
+fn draw_score() void {
+    s i32 = score
+    col i32 = 38
+    while col > 32 {
+        text_put(col, 0, 176 + s % 10, WHITE, 0)
+        s = s / 10
+        col -= 1
+    }
+}
+
+fn place_food() void {
+    tries i32 = 0
+    while tries < 64 {
+        c i32 = roll() % (W * H)
+        if gpu.text[c] == 0 {
+            food = c
+            gpu.text[c] = FOOD
+            return
+        }
+        tries += 1
+    }
+}
+
+// starts a game on a drawn field with the snake, score state and food
+fn start() void {
+    length = 3
+    gpu.text[8 * W + 10] = 1 + BODY + (65 << 16)
+    gpu.text[8 * W + 11] = 5 + BODY + (65 << 16)
+    gpu.text[8 * W + 12] = 16 + BODY
+    vs = 0
+    clr = 0
+    pc = 8 * W + 12
+    pin = 4
+    pi = 2
+    pp = pc
+    pw = 5 + BODY + (65 << 16)
+    tc = 8 * W + 11
+    k i32 = 1
+    while k <= 16 {
+        ring[(bi - k) & 511] = 0
+        k += 1
+    }
+    ring[bi & 511] = 8 * W + 10
+    ring[(bi + 1) & 511] = 8 * W + 11
+    ring[(bi + 2) & 511] = 8 * W + 12
+    bi += 3
+    hc = 8 * W + 13
+    dstep = 1
+    score = 0
+    state = 0
+    wait = 0
+    pend = 0
+    grow = 0
+    same = 0
+    fc = 2 * W + roll() % ((H - 2) * W)
+    ta = tc
+    tv = 0
+    tail_prev = 8 * W + 10
+    tvm = 0
+    pg = 0
+    u = ZERO
+    t = u
+    h = u
+    cr = 0
+    sa = 38
+    sv = u
+    r i32 = roll()
+    row i32 = 2 + r % 13
+    row = row + zext[i32](row == 8)
+    food = row * W + 1 + r / 13 % 38
+    gpu.text[food] = FOOD
+}
+
+fn new_game() void {
+    i i32 = 0
+    while i < W * H - 3 {
+        gpu.text[i] = 0
+        gpu.text[i + 1] = 0
+        gpu.text[i + 2] = 0
+        gpu.text[i + 3] = 0
+        i += 4
+    }
+    x i32 = 0
+    while x < W {
+        gpu.text[W + x] = WALL
+        gpu.text[(H - 1) * W + x] = WALL
+        x += 1
+    }
+    y i32 = 1
+    while y < H {
+        gpu.text[y * W] = WALL
+        gpu.text[y * W + W - 1] = WALL
+        y += 1
+    }
+    gpu.bg = 4
+    gpu.planes[0].x0 = 4
+    gpu.planes[0].y0 = 12
+    gpu.planes[0].x1 = 155
+    gpu.planes[0].y1 = 89
+    gpu.planes[0].a = 6
+    gpu.planes[0].e = 4
+    gpu.planes[0].i = 3
+    gpu.planes[0].pattern = 2
+    gpu.planes[0].p0 = 117 | 189 << 8
+    gpu.planes[0].p2 = 3
+    gpu.planes[0].sh = 31
+    gpu.planes[0].enable = 1
+    // SCORE, one pixel lower
+    gpu.text[1] = 211 | WHITE << 8
+    gpu.text[2] = 195 | WHITE << 8
+    gpu.text[3] = 207 | WHITE << 8
+    gpu.text[4] = 210 | WHITE << 8
+    gpu.text[5] = 197 | WHITE << 8
+    draw_score()
+    start()
+}
+
+// the snake and message are already gone after a death, so this just starts again
+fn restart() void {
+    if food >= 0 { gpu.text[food] = 0 }
+    gpu.text[36] = ZERO
+    gpu.text[37] = ZERO
+    // the next frame draws the last digit (sa, sv)
+    start()
+}
+
+fn game_init() void {
+    frame_ticks = 3
+    seed = random() & 65535
+    load_start()
+    new_game()
+    load_done()
+}
+
+// runs every frame after a death
+fn dead() void {
+    // the death frame only stops the snake. The next one erases it using the ring, gives the
+    // crash cell its word back and shows the message. After a button it all goes in one frame too
+    tail_prev = W - 1
+    tvm = 0
+    if wait == 0 {
+        cv = WALL * zext[i32](ov == WALL)
+        n i32 = length + 5
+        k i32 = 0
+        while k < n {
+            gpu.text[ring[(bi - 1 - k) & 511] & 1023] = 0
+            gpu.text[ring[(bi - 2 - k) & 511] & 1023] = 0
+            gpu.text[ring[(bi - 3 - k) & 511] & 1023] = 0
+            gpu.text[ring[(bi - 4 - k) & 511] & 1023] = 0
+            gpu.text[ring[(bi - 5 - k) & 511] & 1023] = 0
+            gpu.text[ring[(bi - 6 - k) & 511] & 1023] = 0
+            gpu.text[ring[(bi - 7 - k) & 511] & 1023] = 0
+            gpu.text[ring[(bi - 8 - k) & 511] & 1023] = 0
+            k += 8
+        }
+        gpu.text[pc & 1023] = cv
+        message(1)
+    }
+    wait += 1
+    if clr != 0 {
+        message(0)
+        restart()
+    }
+    if clr == 0 && wait > OVER_WAIT && buttons != 0 { clr = 1 }
+}
+
+fn game_update() void {
+    if buttons & 15 != 0 { steer = buttons & 15 }
+    if phase == 1 {
+        slide_in()
+        phase = 2
+    } else if phase == 2 {
+        slide_out()
+        phase = 0
+    } else {
+        move()
+    }
+}
+
+fn move() void {
+    // draws the move picked last frame while this frame's buttons pick the next, so nothing
+    // here waits on a load that depends on the buttons. The masks tell the scheduler the
+    // stores stay inside the text grid
+    c i32 = hc & 1023
+    tl i32 = ta & 1023
+    v i32 = vs
+    eat bool = hc == food
+    wt i32 = gpu.text[tc]
+    fv i32 = gpu.text[fc]
+    ws = gpu.text[tl]
+    // show last frame, which is finished by now
+    present()
+    gpu.text[tail_prev] = tvm
+    gpu.text[sa] = sv
+    if state == 0 {
+        // the head faces the way it came in, and the old head links that way and the way it entered
+        gpu.text[pp & 1023] = pw
+        gpu.text[c] = BODY + 16 + zext[i32](dstep == W) + 2 * zext[i32](dstep == -1) + 3 * zext[i32](dstep == -W)
+    }
+    if state == 1 {
+        dead()
+        return
+    }
+    hc0 i32 = hc
+    pi = 2 * zext[i32](dstep == 1) + 3 * zext[i32](dstep == W) + zext[i32](dstep == -W)
+    pin = 4 * zext[i32](dstep == 1) + 8 * zext[i32](dstep == W) + zext[i32](dstep == -1) + 2 * zext[i32](dstep == -W)
+    dstep = step[steer + 16 * ((dstep + 40) & 127)]
+    steer = 0
+    pc = c
+    ring[bi & 511] = c
+    bi += 1
+    hc = c + dstep
+    // the tail moves on, or the snake grows and new food appears where the tail was cleared
+    tail_prev = tl
+    tvm = tv
+    // walls and the snake kill, food doesn't
+    ov = v
+    tc0 i32 = tc
+    state = zext[i32](v != 0) - zext[i32](v == FOOD)
+    e i32 = zext[i32](eat)
+    // food appears two frames after fc is seen free and away from the head. Every test
+    // below is one step from the registers, which keeps the frame short
+    g i32 = zext[i32](fvr + 4096 * near + 1048576 * (2 - same - pend) == 0)
+    z i32 = zext[i32](fvr + 4096 * near + 8192 * grow - 1048576 * (1 - same) > 0)
+    // eaten food is gone until the new one appears
+    food = food + e * (-W * H - food) + grow * (fc - food)
+    pend = pend + e - g
+    // the tail follows the step stored in its word unless the snake grows. Shifting by 31
+    // acts as times zero, so no multiply is needed after the load
+    tc = tc + (wt >> (16 + 15 * grow)) - 64 * (1 - grow)
+    ta = tc + g * (fc - tc0 + 64) - (wt >> (31 - 15 * g))
+    tv = FOOD * g
+    fvr = fv
+    near = zext[i32]((fc - hc0) * (fc - hc0) <= 14641)
+    same = 1 - z
+    if z != 0 { fc = 2 * W + seed % ((H - 2) * W) }
+    seed = (seed * 75 + 74) % 65537
+    // the snake looks longer a frame after it grows. The score updates one digit per frame
+    // and a carry moves to the next digit on the following frame
+    // (carries finish long before the next point)
+    nu i32 = zext[i32](u == ZERO + 9)
+    nt i32 = zext[i32](t == ZERO + 9)
+    a1 i32 = zext[i32](cr == 1)
+    a2 i32 = zext[i32](cr == 2)
+    length = length + pg * zext[i32](length < MAXLEN)
+    score = score + pg
+    u = u + pg * (1 - 10 * nu)
+    t = t + a1 * (1 - 10 * nt)
+    h = h + a2
+    sa = 38 - a1 - 2 * a2
+    sv = u + a1 * (t - u) + a2 * (h - u)
+    cr = pg * nu + 2 * a1 * nt
+    pg = grow
+    grow = g
+    phase = 1
+}
+
+// the two slide frames. The old head is body now, the head slides into its next cell and the
+// tail slides out unless the snake grows. A head about to crash stays put. Presses wait for the move
+fn slide_in() void {
+    present()
+    vs = gpu.text[hc & 1023]
+    s i32 = (ws >> 16) - 64
+    o i32 = zext[i32](dstep == W) + 2 * zext[i32](dstep == -1) + 3 * zext[i32](dstep == -W)
+    slide_h = BODY + 143 + 2 * o
+    slide_p = BODY + 223 + 8 * o + 2 * pi
+    slide_t = ws - (ws & 255) + 151 + 2 * (zext[i32](s == W) + 2 * zext[i32](s == -1) + 3 * zext[i32](s == -W))
+    pp = pc
+    pw = BODY + (zext[i32](dstep == 1) + 2 * zext[i32](dstep == W) + 4 * zext[i32](dstep == -1)
+        + 8 * zext[i32](dstep == -W) + pin) + ((dstep + 64) << 16)
+    if state == 0 { gpu.text[pc & 1023] = slide_p + 1 }
+    if state == 0 { gpu.text[hc & 1023] = slide_h + 1 }
+    if tvm == 0 && state == 0 { gpu.text[tail_prev & 1023] = slide_t + 1 }
+    gpu.text[20] = 0
+}
+
+fn slide_out() void {
+    present()
+    if state == 0 { gpu.text[pc & 1023] = slide_p + 2 }
+    if state == 0 { gpu.text[hc & 1023] = slide_h + 2 }
+    if tvm == 0 && state == 0 { gpu.text[tail_prev & 1023] = slide_t + 2 }
+    gpu.text[21] = 0
+}
+
+// draws GAME OVER (on 1) or clears it (on 0)
+fn message(on i32) void {
+    i i32 = 0
+    while i < 80 {
+        gpu.text[msg[i] & 1023] = on * (msg[i] >> 10)
+        gpu.text[msg[i + 1] & 1023] = on * (msg[i + 1] >> 10)
+        gpu.text[msg[i + 2] & 1023] = on * (msg[i + 2] >> 10)
+        gpu.text[msg[i + 3] & 1023] = on * (msg[i + 3] >> 10)
+        gpu.text[msg[i + 4] & 1023] = on * (msg[i + 4] >> 10)
+        gpu.text[msg[i + 5] & 1023] = on * (msg[i + 5] >> 10)
+        gpu.text[msg[i + 6] & 1023] = on * (msg[i + 6] >> 10)
+        gpu.text[msg[i + 7] & 1023] = on * (msg[i + 7] >> 10)
+        i += 8
+    }
+}

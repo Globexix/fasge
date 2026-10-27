@@ -1,4 +1,4 @@
-use "engine/sdl.fas"
+use "../engine/sdl.fas"
 
 const RECT_SIZE i32 = 10
 const DIGIT_WORD i32 = 48 + 0xff00
@@ -19,8 +19,8 @@ fn game_init() void {
     gpu.rects[0].color = 0xf5
     gpu.rects[0].enable = 1
 
-    text_print(0, 0, c"STEPS: ", 0xfc)
-    text_print(6, 0, c"000", 0xff)
+    text_print(0, 0, c"STEPS: ", 0xfc, 0)
+    text_print(6, 0, c"000", 0xff, 0)
 
     present()
 }
