@@ -1,0 +1,47 @@
+use "core.fas"
+
+extern "C" {
+    fn fbt_in(port i32) i32
+    fn fbt_present() void
+    fn fbt_out(port i32, v i32) void
+}
+
+fn present() void {
+    fbt_present()
+}
+
+fn random() i32 {
+    return fbt_in(254)
+}
+
+fn text_fill(x0 i32, y0 i32, x1 i32, y1 i32, word i32) void {
+    gpu.text_fill = word
+    gpu.text_box = (x0 & 63) | (y0 & 63) << 6 | (x1 & 63) << 12 | (y1 & 63) << 18
+}
+
+fn load_start() void {
+    gpu.video_palette = 1
+    gpu.video = 0
+    gpu.video = -1
+}
+
+fn load_done() void {
+    present()
+    gpu.video = 0
+    gpu.video_palette = 0
+}
+
+fn main() i32 {
+    game_init()
+    while running {
+        next i32 = fbt_in(255) + 6
+        while fbt_in(255) < next {
+            next += 6
+            tick += 1
+            buttons_prev = buttons
+            buttons = fbt_in(0) * BTN_UP + fbt_in(2) * BTN_DOWN + fbt_in(3) * BTN_RIGHT + fbt_in(1) * BTN_LEFT + fbt_in(4) * BTN_SPECIAL + fbt_in(5) * BTN_A1
+            game_update()
+        }
+    }
+    return 0
+}
