@@ -1,6 +1,7 @@
 use "C" <math.h>
 use "core.fas"
 use "font.fas"
+use "art.fas"
 
 const PIXELS usize = 160 * 96
 const NOT_COVERED i32 = -2147483647 - 1
@@ -121,8 +122,9 @@ fn plane_texel(p addr, u i32, v i32) i32 {
         case 5: return 2 * (shr(pl.p1, (shr(u, s) & 7) + 8 * (shr(v, s) & 3)) & 1)
         case 6, 7: return shr(pl.p1, (shr(u, s - 1) & 6) + 8 * (shr(v, s) & 3)) & 3
         case 8: {
-            row usize = bitcast[u32](clamp(shr(v, s), 0, 15))
-            word i32 = 0
+            if pl.tex < 0 || pl.tex > 63 { return 0 }
+            row i32 = clamp(shr(v, s), 0, 15)
+            word i32 = TEXTURE_ROM[bitcast[u32](pl.tex * 16 + row)]
             return shr(word, shr(u, s - 1) & 30) & 3
         }
         default: return 0
@@ -187,9 +189,6 @@ fn compose_planes() void {
     }
 }
 
-// 16 rows per sprite, texel k of a row at bits 2k. all zeros = invisible
-var sprite_rom arr[64, arr[16, i32]]
-
 // slot 0 pixels with enable >= 2, drawn again above rects and text
 var raised_pixel arr[256, usize]
 var raised_index arr[256, u8]
@@ -200,7 +199,6 @@ fn compose_sprites() void {
     for slot usize = 0; slot < len(latched.sprites); slot += 1 {
         view s = latched.sprites[slot]
         if s.enable == 0 || s.id < 0 || s.id > 63 { continue }
-        view rom = sprite_rom[bitcast[u32](s.id)]
         raised bool = slot == 0 && s.enable >= 2
         for cy i32 = 0; cy < 16; cy += 1 {
             y i32 = s.y0 + cy
@@ -208,7 +206,7 @@ fn compose_sprites() void {
             for cx i32 = 0; cx < 16; cx += 1 {
                 x i32 = s.x0 + cx
                 if x < 0 || x >= SCREEN_W { continue }
-                t i32 = (rom[bitcast[u32](cy)] >> (2 * cx)) & 3
+                t i32 = (SPRITE_ROM[bitcast[u32](s.id * 16 + cy)] >> (2 * cx)) & 3
                 if t == 0 { continue }
                 pixel usize = bitcast[u32](y * SCREEN_W + x)
                 if s.w > 0 && top_occlude[pixel] && top_den[pixel] > s.w { continue }
