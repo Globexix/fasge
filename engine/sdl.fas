@@ -108,7 +108,7 @@ fn main() i32 {
         if !running { break }
 
         sdl_ticks += 1
-        if sdl_ticks % 6 == 0 {
+        if sdl_ticks % bitcast[u32](clamp(frame_ticks, 1, 60)) == 0 {
             tick += 1
             buttons_prev = buttons
             buttons = sdl_read_buttons(keys)

@@ -33,15 +33,14 @@ fn load_done() void {
 
 fn main() i32 {
     game_init()
+    next i32 = fbt_in(255) + frame_ticks
     while running {
-        next i32 = fbt_in(255) + 6
-        while fbt_in(255) < next {
-            next += 6
-            tick += 1
-            buttons_prev = buttons
-            buttons = fbt_in(0) * BTN_UP + fbt_in(2) * BTN_DOWN + fbt_in(3) * BTN_RIGHT + fbt_in(1) * BTN_LEFT + fbt_in(4) * BTN_SPECIAL + fbt_in(5) * BTN_A1
-            game_update()
-        }
+        while fbt_in(255) < next {}
+        next += frame_ticks
+        tick += 1
+        buttons_prev = buttons
+        buttons = fbt_in(0) * BTN_UP + fbt_in(2) * BTN_DOWN + fbt_in(3) * BTN_RIGHT + fbt_in(1) * BTN_LEFT + fbt_in(4) * BTN_SPECIAL + fbt_in(5) * BTN_A1
+        game_update()
     }
     return 0
 }

@@ -3,6 +3,7 @@ const SCREEN_H i32 = 96
 
 var running bool = true
 var tick i32 = 0
+var frame_ticks i32 = 6
 
 const BTN_UP i32 = 1
 const BTN_DOWN i32 = 2
