@@ -60,6 +60,10 @@ fn present() void {
     copy(latched, gpu)
 }
 
+fn now_ticks() i32 {
+    return bitcast[i32](sdl_ticks)
+}
+
 fn load_start() void {}
 fn load_done() void {}
 

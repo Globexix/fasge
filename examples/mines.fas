@@ -396,7 +396,7 @@ fn reveal_at(c i32) void {
     if placed == 0 {
         clear_zone(c)
         placed = 1
-        next_sec = tick * frame_ticks + 60
+        next_sec = now_ticks() + 60
     }
     if mine[c] == 1 {
         game_lost(c)
@@ -638,7 +638,7 @@ fn game_init() void {
 
 fn game_update() void {
     present()
-    now i32 = tick * frame_ticks
+    now i32 = now_ticks()
     p i32 = buttons & (buttons ^ buttons_prev)
     if state != 0 {
         idle += 1

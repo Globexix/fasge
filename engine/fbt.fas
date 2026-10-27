@@ -10,6 +10,11 @@ fn present() void {
     fbt_present()
 }
 
+// game ticks since power on
+fn now_ticks() i32 {
+    return fbt_in(255)
+}
+
 fn random() i32 {
     return fbt_in(254)
 }
@@ -34,13 +39,15 @@ fn load_done() void {
 fn main() i32 {
     game_init()
     next i32 = fbt_in(255) + frame_ticks
+    nb i32 = 0
     while running {
         while fbt_in(255) < next {}
         next += frame_ticks
         tick += 1
         buttons_prev = buttons
-        buttons = fbt_in(0) * BTN_UP + fbt_in(2) * BTN_DOWN + fbt_in(3) * BTN_RIGHT + fbt_in(1) * BTN_LEFT + fbt_in(4) * BTN_SPECIAL + fbt_in(5) * BTN_A1
+        buttons = nb
         game_update()
+        nb = fbt_in(0) * BTN_UP + fbt_in(2) * BTN_DOWN + fbt_in(3) * BTN_RIGHT + fbt_in(1) * BTN_LEFT + fbt_in(4) * BTN_SPECIAL + fbt_in(5) * BTN_A1
     }
     return 0
 }
