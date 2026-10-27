@@ -62,7 +62,7 @@ var msg arr[80, i32] = {133362, 132339, 132340, 138522, 137500, 140610, 141635, 
 var ring arr[512, i32] = {}  // cells the head was drawn in, so a death can erase the snake without walking it
 var bi i32 = 0
 var seed i32 = 1
-var phase i32 = 0
+var phase i32 = 0        // 1 after a move, 0 after a death frame so the slides draw nothing
 var steer i32 = 0
 var slide_h i32 = 0
 var slide_p i32 = 0
@@ -200,7 +200,7 @@ fn restart() void {
 }
 
 fn game_init() void {
-    frame_ticks = 3
+    frame_ticks = 9
     seed = random() & 65535
     load_start()
     new_game()
@@ -239,17 +239,13 @@ fn dead() void {
     if clr == 0 && wait > OVER_WAIT && buttons != 0 { clr = 1 }
 }
 
+// a move and its two slide frames in one update. A branch around the slides would cost
+// the move frame time, so after a death phase 0 turns their stores off instead
 fn game_update() void {
     if buttons & 15 != 0 { steer = buttons & 15 }
-    if phase == 1 {
-        slide_in()
-        phase = 2
-    } else if phase == 2 {
-        slide_out()
-        phase = 0
-    } else {
-        move()
-    }
+    move()
+    slide_in()
+    slide_out()
 }
 
 fn move() void {
@@ -274,12 +270,13 @@ fn move() void {
     }
     if state == 1 {
         dead()
+        phase = 0
         return
     }
     hc0 i32 = hc
     pi = 2 * zext[i32](dstep == 1) + 3 * zext[i32](dstep == W) + zext[i32](dstep == -W)
     pin = 4 * zext[i32](dstep == 1) + 8 * zext[i32](dstep == W) + zext[i32](dstep == -1) + 2 * zext[i32](dstep == -W)
-    dstep = step[steer + 16 * ((dstep + 40) & 127)]
+    dstep = step[(steer & 15) + 16 * ((dstep + 40) & 127)]
     steer = 0
     pc = c
     ring[bi & 511] = c
@@ -343,17 +340,17 @@ fn slide_in() void {
     pp = pc
     pw = BODY + (zext[i32](dstep == 1) + 2 * zext[i32](dstep == W) + 4 * zext[i32](dstep == -1)
         + 8 * zext[i32](dstep == -W) + pin) + ((dstep + 64) << 16)
-    if state == 0 { gpu.text[pc & 1023] = slide_p + 1 }
-    if state == 0 { gpu.text[hc & 1023] = slide_h + 1 }
-    if tvm == 0 && state == 0 { gpu.text[tail_prev & 1023] = slide_t + 1 }
+    if phase - state == 1 { gpu.text[pc & 1023] = slide_p + 1 }
+    if phase - state == 1 { gpu.text[hc & 1023] = slide_h + 1 }
+    if tvm == 0 && phase - state == 1 { gpu.text[tail_prev & 1023] = slide_t + 1 }
     gpu.text[20] = 0
 }
 
 fn slide_out() void {
     present()
-    if state == 0 { gpu.text[pc & 1023] = slide_p + 2 }
-    if state == 0 { gpu.text[hc & 1023] = slide_h + 2 }
-    if tvm == 0 && state == 0 { gpu.text[tail_prev & 1023] = slide_t + 2 }
+    if phase - state == 1 { gpu.text[pc & 1023] = slide_p + 2 }
+    if phase - state == 1 { gpu.text[hc & 1023] = slide_h + 2 }
+    if tvm == 0 && phase - state == 1 { gpu.text[tail_prev & 1023] = slide_t + 2 }
     gpu.text[21] = 0
 }
 
